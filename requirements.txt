@@ -1,0 +1,20 @@
+# core requirements
+attrs==19.2.0
+vistautils==0.14.0
+immutablecollections==0.9.0
+
+
+# extras for development
+black==19.3b0
+pytest==5.2.0
+coverage==4.5.4
+pytest-cov==2.8.0
+pytest-benchmark==3.2.2
+pylint==2.3.1
+flake8==3.7.8
+mypy==0.701
+isort==4.3.21
+towncrier
+sphinx
+sphinx-autodoc-typehints
+sphinx_rtd_theme
