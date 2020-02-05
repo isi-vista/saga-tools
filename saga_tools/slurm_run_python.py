@@ -187,7 +187,6 @@ SLURM_BATCH_TEMPLATE = """#!/usr/bin/env bash
 #SBATCH --partition={partition}
 #SBATCH --job-name={job_name}
 #SBATCH --output={stdout_log_path}
-#SBATCH --nodelist=gaia01
 #SBATCH --mem={memory_string}
 #SBATCH --ntasks=1
 #SBATCH --gpus-per-task={num_gpus}
