@@ -202,7 +202,6 @@ if [[ -z ${{PS1+x}} ]]
     export PS1=""
 fi
 
-conda_base={conda_base_path}
 source "{conda_base_path}"/etc/profile.d/conda.sh
 conda activate {conda_environment}
 
