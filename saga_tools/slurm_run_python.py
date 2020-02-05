@@ -103,7 +103,7 @@ class SlurmPythonRunner:
 
             # Whether we use an account parameter or a quality of service parameter
             # depends on whether we are running on a project partition
-            # or one of the available-to-everyone-but-you-can-be-fkilled-at-any-time partitions.
+            # or one of the available-to-everyone-but-you-can-be-killed-at-any-time partitions.
             if partition in ("scavenge", "ephemeral"):
                 account_or_qos = f"#SBATCH --qos={partition}"
             else:
