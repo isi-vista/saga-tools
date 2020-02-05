@@ -197,7 +197,7 @@ set -euo pipefail
 
 # This is needed because SLURM jobs are run from a non-interactive shell,
 # but conda expects PS1 (the prompt variable) to be set.
-if [ -z ${{PS1+x}} ]
+if [[ -z ${{PS1+x}} ]]
   then
     export PS1=""
 fi
