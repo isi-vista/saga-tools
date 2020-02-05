@@ -13,7 +13,7 @@ Cluster Parameters
 * *conda_base_path*: path to the base of the conda install (not the *bin* directory)
 * *conda_environment*: name of the conda environment to run in
 * *log_base_directory*: directory to write the job logs to.
-   Logs are named after the *job_name*, with any */*s becoming directories.
+   Logs are named after the *job_name*, with any forward slashes becoming directories.
 
 ##################
 Job Parameters
@@ -139,7 +139,7 @@ class SlurmPythonRunner:
         """
         Gets the directory to write the job logs to.
 
-        This will be `log_base_directory` unless the job name contains */*s.
+        This will be `log_base_directory` unless the job name contains forward slashes.
         If so, a subdirectory will be created under `log_base_directory`,
         with each */*-separated component except the last becoming a directory level.
 
