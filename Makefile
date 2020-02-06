@@ -20,10 +20,10 @@ MYPY:=mypy $(MYPY_ARGS) $(SOURCE_DIR_NAME) tests benchmarks
 FILTERED_MYPY:=$(MYPY) | perl -ne 'print if !/(Too many arguments|Signature of "__getitem__"|Only concrete class|Unexpected keyword argument|mypy\/typeshed\/stdlib\/3\/builtins.pyi:39: note: "\w+" defined here|Module( '\''\w+'\'')? has no attribute|has no attribute "validator"|has no attribute "default"|SelfType" has no attribute)/' | tee ./.mypy_tmp && test ! -s ./.mypy_tmp
 
 test:
-	python -m pytest tests
+	python -m pytest --suppress-no-test-exit-code tests
 
 coverage:
-	python -m pytest --cov=saga_tools tests
+	python -m pytest --suppress-no-test-exit-code --cov=saga_tools tests
 
 lint:
 	pylint $(SOURCE_DIR_NAME) tests benchmarks
