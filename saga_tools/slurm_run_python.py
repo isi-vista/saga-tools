@@ -19,7 +19,7 @@ Cluster Parameters
 Job Parameters
 ##################
 * *entry_point*: the name of the module to run, e.g. vistautils.scripts.foo
-* *memory*: the amount of memory to reserve, e.g. 4G.
+* *memory*: the amount of memory to reserve on the node, e.g. 4G.
 * *working_directory* (optional)
 * *num_gpus* (optional, default 0): the number of GPUs to reserve.
 * *num_cpus* (optional, default 1): the number of CPUs to reserve.
@@ -88,10 +88,12 @@ class SlurmPythonRunner:
         *,
         partition: str,
         working_directory: Path,
+        # We deliberately don't set a default memory request because we want users
+        # to think about if explicitly.
+        memory_request: MemoryAmount,
         num_gpus: int = 0,
         num_cpus: int = 1,
         job_name: Optional[str] = None,
-        memory_request: MemoryAmount,
         slurm_script_path: Optional[Path] = None,
         echo_template: bool = False,
     ):
