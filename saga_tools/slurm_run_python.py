@@ -30,9 +30,9 @@ Job Parameters
    SLURM batch script to (for debugging).
 
 """
+import argparse
 import os
 import subprocess
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -213,13 +213,20 @@ python -m {entry_point} {param_file}
 """
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print(
-            "usage: slurm_run_python cluster_param_file job_param_file\n"
-            "Please see this script's docstring for more details."
-        )
-        sys.exit(1)
+    parser = argparse.ArgumentParser(  # pylint:disable=invalid-name
+        description="Run a Python script on SLURM"
+    )
+    parser.add_argument(
+        "cluster_parameters",
+        type=Path,
+        help="Param file with general information about the SLURM cluster",
+    )
+    parser.add_argument(
+        "job_parameters", type=Path, help="Param file with job-specific parameters"
+    )
+    args = parser.parse_args()  # pylint:disable=invalid-name
+
     main(
-        cluster_params=YAMLParametersLoader().load(Path(sys.argv[1])),
-        job_param_file=Path(sys.argv[2]),
+        cluster_params=YAMLParametersLoader().load(args.cluster_parameters),
+        job_param_file=args.job_parameters,
     )
