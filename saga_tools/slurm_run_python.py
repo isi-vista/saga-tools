@@ -13,7 +13,7 @@ Cluster Parameters
 * *conda_base_path*: path to the base of the conda install (not the *bin* directory)
 * *conda_environment*: name of the conda environment to run in
 * *spack_environment*: (optional): the spack environment, if any, to run in. Cannot appear with *spack_packages*.
-* *spack_packages*: (optional): a comma-separated list of Spack packages to load (in *module@version* format).
+* *spack_packages*: (optional): a YAML list of Spack packages to load (in *module@version* format).
 * *spack_root*: the spack installation to use (necessary only if *spack_environment* or *spack_modules*) is specified.
    This is usually the path to a working copy of a spack repository.
 * *log_base_directory*: directory to write the job logs to.
