@@ -124,7 +124,7 @@ class SpackConfiguration:
 
     def __attrs_post_init__(self) -> None:
         if self.spack_environment == self.spack_packages:
-            raise RuntimeError("A Spack configuration requires either a environment or a list of packages, "
+            raise RuntimeError("A Spack configuration requires either an environment or a list of packages, "
                                "but not both.`")
 
     def sbatch_lines(self) -> str:
