@@ -12,6 +12,10 @@ Cluster Parameters
 * *partition*: the cluster partition to run on, e.g. gaia or ephemeral.
 * *conda_base_path*: path to the base of the conda install (not the *bin* directory)
 * *conda_environment*: name of the conda environment to run in
+* *spack_environment*: (optional): the spack environment, if any, to run in. Cannot appear with *spack_packages*.
+* *spack_packages*: (optional): a comma-separated list of Spack packages to load (in *module@version* format).
+* *spack_root*: the spack installation to use (necessary only if *spack_environment* or *spack_modules*) is specified.
+   This is usually the path to a working copy of a spack repository.
 * *log_base_directory*: directory to write the job logs to.
    Logs are named after the *job_name*, with any forward slashes becoming directories.
 
@@ -34,10 +38,10 @@ import argparse
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from attr import attrib, attrs
-from attr.validators import instance_of
+from attr.validators import instance_of, optional, deep_iterable
 
 from immutablecollections import immutabledict
 from vistautils.memory_amount import MemoryAmount, MemoryUnit
@@ -68,16 +72,120 @@ def main(cluster_params: Parameters, job_param_file: Path) -> None:
 
 
 @attrs(frozen=True, slots=True, kw_only=True)
-class SlurmPythonRunner:
+class SpackPackage:
+    package_name: str = attrib(validator=instance_of(str))
+    version: str = attrib(validator=instance_of(str))
+
+    @staticmethod
+    def parse(package_specifier: str) -> "SpackPackage":
+        parts = package_specifier.split("@")
+        if len(parts) == 2:
+            return SpackPackage(package_name=parts[0],
+                                version=parts[1])
+        else:
+            raise RuntimeError(f"Expected a package specified of the form packaged@version but for {package_specifier}")
+
+    def __str__(self) -> str:
+        return f"{self.package_name}@{self.version}"
+
+@attrs(frozen=True, slots=True, kw_only=True)
+class SpackConfiguration:
+    spack_root: Path = attrib(validator=instance_of(Path))
+    spack_environment: Optional[str] = attrib(validator=optional(instance_of(str)),
+                                              default=None)
+    spack_packages: Optional[Tuple[SpackPackage]] = attrib(validator=optional(deep_iterable(instance_of(SpackPackage))),
+                                                           default=tuple())
+
+    SPACK_ROOT_PARAM = "spack_root"
+    SPACK_ENVIRONMENT_PARAM = "spack_environment"
+    SPACK_PACKAGES_PARAM = "spack_packages"
+
+    @staticmethod
+    def from_parameters(params: Parameters) -> Optional["SpackConfiguration"]:
+        if SpackConfiguration.SPACK_ENVIRONMENT_PARAM in params:
+            if SpackConfiguration.SPACK_PACKAGES_PARAM in params:
+                raise RuntimeError(f"{SpackConfiguration.SPACK_ENVIRONMENT_PARAM} "
+                                   f"and {SpackConfiguration.SPACK_PACKAGES_PARAM} are mutually exclusive")
+            return SpackConfiguration(
+                spack_root=params.existing_directory(SpackConfiguration.SPACK_ROOT_PARAM),
+                spack_environment=params.string(SpackConfiguration.SPACK_ENVIRONMENT_PARAM)
+            )
+        elif SpackConfiguration.SPACK_PACKAGES_PARAM in params:
+            if SpackConfiguration.SPACK_ENVIRONMENT_PARAM in params:
+                raise RuntimeError(f"{SpackConfiguration.SPACK_ENVIRONMENT_PARAM} "
+                                   f"and {SpackConfiguration.SPACK_PACKAGES_PARAM} are mutually exclusive")
+            return SpackConfiguration(
+                spack_root=params.existing_directory(SpackConfiguration.SPACK_ROOT_PARAM),
+                spack_packages=[SpackPackage.parse(package_specifier) for package_specifier in
+                            params.arbitrary_list(SpackConfiguration.SPACK_PACKAGES_PARAM)],
+            )
+        else:
+            return None
+
+    def __attrs_post_init__(self) -> None:
+        if self.spack_environment == self.spack_packages:
+            raise RuntimeError("A Spack configuration requires either a environment or a list of packages, "
+                               "but not both.`")
+
+    def sbatch_lines(self) -> str:
+        if self.spack_environment:
+            config_lines = SPACK_ENVIRONMENT_TEMPLATE.format(
+                spack_root=self.spack_root,
+                spack_environment=self.spack_environment
+            )
+        else:
+            config_lines = "\n".join(f"spack load {package}" for package in self.spack_packages)
+        return "\n".join([
+            SPACK_COMMON_TEMPLATE.format(spack_root=self.spack_root),
+            config_lines,
+            "\n"])
+
+SPACK_COMMON_TEMPLATE = """
+. "{spack_root}"/share/spack/setup-env.sh
+"""
+
+SPACK_ENVIRONMENT_TEMPLATE = """
+spack env activate {spack_environment}
+"""
+
+@attrs(frozen=True, slots=True, kw_only=True)
+class CondaConfiguration:
     conda_base_path: Path = attrib(validator=instance_of(Path))
     conda_environment: str = attrib(validator=instance_of(str))
+
+    CONDA_ENVIRONMENT_PARAM = "conda_environment"
+
+    @staticmethod
+    def from_parameters(params: Parameters) -> Optional["CondaConfiguration"]:
+        if CondaConfiguration.CONDA_ENVIRONMENT_PARAM in params:
+            return CondaConfiguration(
+                conda_base_path=params.existing_directory("conda_base_path"),
+                conda_environment=params.string(CondaConfiguration.CONDA_ENVIRONMENT_PARAM)
+            )
+        else:
+            return None
+
+    def sbatch_lines(self) -> str:
+        return CONDA_SBATCH_TEMPLATE.format(conda_base_path=self.conda_base_path,
+                                            conda_environment=self.conda_environment)
+
+CONDA_SBATCH_TEMPLATE = """
+source "{conda_base_path}"/etc/profile.d/conda.sh
+conda activate {conda_environment}
+"""
+
+
+@attrs(frozen=True, slots=True, kw_only=True)
+class SlurmPythonRunner:
     log_base_directory: Path = attrib(validator=instance_of(Path))
+    conda_config: Optional[CondaConfiguration] = attrib(validator=optional(instance_of(CondaConfiguration)))
+    spack_config: Optional[SpackConfiguration] = attrib(validator=optional(instance_of(SpackConfiguration)))
 
     @staticmethod
     def from_parameters(params: Parameters) -> "SlurmPythonRunner":
         return SlurmPythonRunner(
-            conda_base_path=params.existing_directory("conda_base_path").absolute(),
-            conda_environment=params.string("conda_environment_name"),
+            conda_config=CondaConfiguration.from_parameters(params),
+            spack_config=SpackConfiguration.from_parameters(params),
             log_base_directory=params.creatable_directory("log_directory").absolute(),
         )
 
@@ -119,9 +227,8 @@ class SlurmPythonRunner:
                 num_cpus=num_cpus,
                 num_gpus=num_gpus,
                 stdout_log_path=job_log_directory / f"{job_name}.log",
-                spack_setup_lines="",
-                conda_base_path=self.conda_base_path,
-                conda_environment=self.conda_environment,
+                spack_lines=self.spack_config.sbatch_lines() if self.spack_config else "",
+                conda_lines=self.conda_config.sbatch_lines() if self.conda_config else "",
                 working_directory=working_directory,
                 entry_point=entry_point_name,
                 param_file=param_file.absolute(),
@@ -175,14 +282,6 @@ class SlurmPythonRunner:
         )
 
 
-# TODO: fix hard-coded spack setup.
-# https://github.com/isi-vista/saga-tools/issues/1
-SPACK_SETUP_LINES = """
-. /scratch/spack/share/spack/setup-env.sh
-spack load cuda@9.0.176
-spack load cudnn@7.6.5.32-9.0-linux-x64
-"""
-
 SLURM_BATCH_TEMPLATE = """#!/usr/bin/env bash
 
 {account_or_qos}
@@ -203,10 +302,8 @@ if [[ -z ${{PS1+x}} ]]
     export PS1=""
 fi
 
-source "{conda_base_path}"/etc/profile.d/conda.sh
-conda activate {conda_environment}
-
-{spack_setup_lines}
+{conda_lines}
+{spack_lines}
 
 cd {working_directory}
 python -m {entry_point} {param_file}
