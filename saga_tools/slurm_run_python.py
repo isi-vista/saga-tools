@@ -123,7 +123,7 @@ class SpackConfiguration:
             return None
 
     def __attrs_post_init__(self) -> None:
-        if self.spack_environment == self.spack_packages:
+        if bool(self.spack_environment) == bool(self.spack_packages):
             raise RuntimeError("A Spack configuration requires either an environment or a list of packages, "
                                "but not both.`")
 
