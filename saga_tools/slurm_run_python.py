@@ -83,7 +83,7 @@ class SpackPackage:
             return SpackPackage(package_name=parts[0],
                                 version=parts[1])
         else:
-            raise RuntimeError(f"Expected a package specified of the form packaged@version but for {package_specifier}")
+            raise RuntimeError(f"Expected a package specified of the form packaged@version but got {package_specifier}")
 
     def __str__(self) -> str:
         return f"{self.package_name}@{self.version}"
