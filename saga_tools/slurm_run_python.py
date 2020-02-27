@@ -301,7 +301,8 @@ class SlurmPythonRunner:
         ]
     )
 
-    def _to_slurm_memory_string(self, memory_request: MemoryAmount) -> str:
+    @staticmethod
+    def to_slurm_memory_string(memory_request: MemoryAmount) -> str:
         return (
             f"{memory_request.amount}"
             f"{SlurmPythonRunner._SLURM_MEMORY_UNITS[memory_request.unit]}"
