@@ -17,7 +17,7 @@ setup(
     author_email="gabbard@isi.edu",
     description="Tools for more convenient use of the ISI VISTA SAGA Cluster",
     url="https://github.com/isi-vista/saga-tools",
-    packages=[],
+    packages=['saga_tools'],
     # 3.6 and up, but not Python 4
     python_requires="~=3.6",
     install_requires=[
