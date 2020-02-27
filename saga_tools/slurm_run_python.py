@@ -38,15 +38,17 @@ import argparse
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 from attr import attrib, attrs
-from attr.validators import deep_iterable, instance_of, optional
+from attr.validators import instance_of, optional
 
-from immutablecollections import immutabledict
-from vistautils.memory_amount import MemoryAmount, MemoryUnit
+from vistautils.memory_amount import MemoryAmount
 from vistautils.parameters import Parameters, YAMLParametersLoader
 from vistautils.range import Range
+
+from saga_tools.conda import CondaConfiguration
+from saga_tools.spack import SpackConfiguration
 
 import temppathlib
 
@@ -69,132 +71,6 @@ def main(cluster_params: Parameters, job_param_file: Path) -> None:
         echo_template=cluster_params.boolean("echo_template", default=False),
         slurm_script_path=job_params.optional_creatable_file("slurm_script_path"),
     )
-
-
-@attrs(frozen=True, slots=True, kw_only=True)
-class SpackPackage:
-    package_name: str = attrib(validator=instance_of(str))
-    version: str = attrib(validator=instance_of(str))
-
-    @staticmethod
-    def parse(package_specifier: str) -> "SpackPackage":
-        parts = package_specifier.split("@")
-        if len(parts) == 2:
-            return SpackPackage(package_name=parts[0], version=parts[1])
-        else:
-            raise RuntimeError(
-                f"Expected a package specified of the form packaged@version but got {package_specifier}"
-            )
-
-    def __str__(self) -> str:
-        return f"{self.package_name}@{self.version}"
-
-
-@attrs(frozen=True, slots=True, kw_only=True)
-class SpackConfiguration:
-    spack_root: Path = attrib(validator=instance_of(Path))
-    spack_environment: Optional[str] = attrib(
-        validator=optional(instance_of(str)), default=None
-    )
-    spack_packages: Optional[Tuple[SpackPackage]] = attrib(
-        validator=optional(deep_iterable(instance_of(SpackPackage))), default=tuple()
-    )
-
-    SPACK_ROOT_PARAM = "spack_root"
-    SPACK_ENVIRONMENT_PARAM = "spack_environment"
-    SPACK_PACKAGES_PARAM = "spack_packages"
-
-    @staticmethod
-    def from_parameters(params: Parameters) -> Optional["SpackConfiguration"]:
-        if SpackConfiguration.SPACK_ENVIRONMENT_PARAM in params:
-            if SpackConfiguration.SPACK_PACKAGES_PARAM in params:
-                raise RuntimeError(
-                    f"{SpackConfiguration.SPACK_ENVIRONMENT_PARAM} "
-                    f"and {SpackConfiguration.SPACK_PACKAGES_PARAM} are mutually exclusive"
-                )
-            return SpackConfiguration(
-                spack_root=params.existing_directory(SpackConfiguration.SPACK_ROOT_PARAM),
-                spack_environment=params.string(
-                    SpackConfiguration.SPACK_ENVIRONMENT_PARAM
-                ),
-            )
-        elif SpackConfiguration.SPACK_PACKAGES_PARAM in params:
-            if SpackConfiguration.SPACK_ENVIRONMENT_PARAM in params:
-                raise RuntimeError(
-                    f"{SpackConfiguration.SPACK_ENVIRONMENT_PARAM} "
-                    f"and {SpackConfiguration.SPACK_PACKAGES_PARAM} are mutually exclusive"
-                )
-            return SpackConfiguration(
-                spack_root=params.existing_directory(SpackConfiguration.SPACK_ROOT_PARAM),
-                spack_packages=[
-                    SpackPackage.parse(package_specifier)
-                    for package_specifier in params.arbitrary_list(
-                        SpackConfiguration.SPACK_PACKAGES_PARAM
-                    )
-                ],
-            )
-        else:
-            return None
-
-    def __attrs_post_init__(self) -> None:
-        if bool(self.spack_environment) == bool(self.spack_packages):
-            raise RuntimeError(
-                "A Spack configuration requires either an environment or a list of packages, "
-                "but not both.`"
-            )
-
-    def sbatch_lines(self) -> str:
-        if self.spack_environment:
-            config_lines = SPACK_ENVIRONMENT_TEMPLATE.format(
-                spack_root=self.spack_root, spack_environment=self.spack_environment
-            )
-        else:
-            config_lines = "\n".join(
-                f"spack load {package}" for package in self.spack_packages
-            )
-        return "\n".join(
-            [SPACK_COMMON_TEMPLATE.format(spack_root=self.spack_root), config_lines, "\n"]
-        )
-
-
-SPACK_COMMON_TEMPLATE = """
-. "{spack_root}"/share/spack/setup-env.sh
-"""
-
-SPACK_ENVIRONMENT_TEMPLATE = """
-spack env activate {spack_environment}
-"""
-
-
-@attrs(frozen=True, slots=True, kw_only=True)
-class CondaConfiguration:
-    conda_base_path: Path = attrib(validator=instance_of(Path))
-    conda_environment: str = attrib(validator=instance_of(str))
-
-    CONDA_ENVIRONMENT_PARAM = "conda_environment"
-
-    @staticmethod
-    def from_parameters(params: Parameters) -> Optional["CondaConfiguration"]:
-        if CondaConfiguration.CONDA_ENVIRONMENT_PARAM in params:
-            return CondaConfiguration(
-                conda_base_path=params.existing_directory("conda_base_path"),
-                conda_environment=params.string(
-                    CondaConfiguration.CONDA_ENVIRONMENT_PARAM
-                ),
-            )
-        else:
-            return None
-
-    def sbatch_lines(self) -> str:
-        return CONDA_SBATCH_TEMPLATE.format(
-            conda_base_path=self.conda_base_path, conda_environment=self.conda_environment
-        )
-
-
-CONDA_SBATCH_TEMPLATE = """
-source "{conda_base_path}"/etc/profile.d/conda.sh
-conda activate {conda_environment}
-"""
 
 
 @attrs(frozen=True, slots=True, kw_only=True)
@@ -291,22 +167,6 @@ class SlurmPythonRunner:
             path_components.extend([parts[:-1]])
             return Path(*path_components)
         return self.log_base_directory
-
-    _SLURM_MEMORY_UNITS = immutabledict(
-        [
-            (MemoryUnit.KILOBYTES, "K"),
-            (MemoryUnit.MEGABYTES, "M"),
-            (MemoryUnit.GIGABYTES, "G"),
-            (MemoryUnit.TERABYTES, "T"),
-        ]
-    )
-
-    @staticmethod
-    def to_slurm_memory_string(memory_request: MemoryAmount) -> str:
-        return (
-            f"{memory_request.amount}"
-            f"{SlurmPythonRunner._SLURM_MEMORY_UNITS[memory_request.unit]}"
-        )
 
 
 SLURM_BATCH_TEMPLATE = """#!/usr/bin/env bash
