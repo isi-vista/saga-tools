@@ -21,8 +21,8 @@ setup(
     # 3.6 and up, but not Python 4
     python_requires="~=3.6",
     install_requires=[
-        "temppathlib==1.0.3",
-        "vistautils==0.19.0"
+        "temppathlib>=1.0.3",
+        "vistautils>=0.19.0"
     ],
     scripts=[],
     classifiers=[
