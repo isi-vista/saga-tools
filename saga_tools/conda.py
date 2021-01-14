@@ -4,7 +4,7 @@ from typing import Optional
 from attr import attrib, attrs
 from attr.validators import instance_of
 
-from pika.connection import Parameters
+from vistautils.parameters import Parameters
 
 
 @attrs(frozen=True, slots=True, kw_only=True)
